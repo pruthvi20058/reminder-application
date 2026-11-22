@@ -18,11 +18,20 @@ const ui = {
   editingTask: null
 };
 
+const DEFAULT_GCAL = {
+  clientId: '',
+  calendarId: '',
+  calendarName: '',
+  hashes: {},
+  lastSync: ''
+};
+
 const state = {
   version: VERSION,
   periods: DEFAULT_PERIODS.map(p => ({ ...p })),
   tasks: [],
-  settings: { ...DEFAULT_SETTINGS }
+  settings: { ...DEFAULT_SETTINGS },
+  gcal: { ...DEFAULT_GCAL }
 };
 
 const listeners = new Set();
@@ -46,7 +55,8 @@ export function save() {
       version: VERSION,
       periods: state.periods,
       tasks: state.tasks,
-      settings: state.settings
+      settings: state.settings,
+      gcal: state.gcal
     }));
   } catch (err) {
     console.warn('[tempo] could not persist state', err);
@@ -62,6 +72,7 @@ export function load() {
       : state.periods;
     state.tasks = Array.isArray(saved.tasks) ? saved.tasks : [];
     state.settings = { ...DEFAULT_SETTINGS, ...(saved.settings || {}) };
+    state.gcal = { ...DEFAULT_GCAL, ...(saved.gcal || {}) };
   } else {
     state.tasks = seedTasks();
   }
@@ -90,6 +101,12 @@ function emit(reason = 'update') {
 export function getState() { return state; }
 export function getUI() { return ui; }
 export function getSettings() { return state.settings; }
+export function getGcal() { return state.gcal; }
+
+export function setGcal(patch) {
+  Object.assign(state.gcal, patch);
+  emit('gcal');
+}
 
 export function openTaskCount() {
   return state.tasks.filter(t => !t.done).length;
@@ -180,7 +197,8 @@ export function exportData() {
     exportedAt: new Date().toISOString(),
     periods: state.periods,
     tasks: state.tasks,
-    settings: state.settings
+    settings: state.settings,
+    gcal: { clientId: state.gcal.clientId, calendarId: state.gcal.calendarId }
   }, null, 2);
 }
 
@@ -192,6 +210,7 @@ export function importData(raw) {
   if (Array.isArray(parsed.periods)) state.periods = parsed.periods;
   if (Array.isArray(parsed.tasks)) state.tasks = parsed.tasks;
   if (parsed.settings) state.settings = { ...DEFAULT_SETTINGS, ...parsed.settings };
+  if (parsed.gcal) state.gcal = { ...DEFAULT_GCAL, ...parsed.gcal };
 
   emit('import');
 }
@@ -200,5 +219,6 @@ export function resetAll() {
   state.periods = DEFAULT_PERIODS.map(p => ({ ...p }));
   state.tasks = seedTasks();
   state.settings = { ...DEFAULT_SETTINGS, theme: state.settings.theme };
+  state.gcal = { ...state.gcal, hashes: {}, lastSync: '' };
   emit('reset');
 }

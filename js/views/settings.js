@@ -3,9 +3,12 @@
    ============================================================ */
 
 import {
-  getState, getSettings, setSettings, exportData, importData, resetAll,
+  getState, getSettings, setSettings, getGcal, setGcal, exportData, importData, resetAll,
   addPeriod, updatePeriod, removePeriod
 } from '../store.js';
+import {
+  connectGoogle, syncNow, disconnectGoogle, isConnected, downloadICS
+} from '../gcal.js';
 import { icon } from '../icons.js';
 import { esc, confirmDialog, toast } from '../ui.js';
 import { openPeriodEditor } from './periodEditor.js';
@@ -86,6 +89,94 @@ function notificationPanel() {
       <button class="btn btn-ghost btn-sm" type="button" id="test-notification" style="margin-top:4px">
         ${icon('bell', { size: 14 })} Send a test notification
       </button>
+    </section>`;
+}
+
+function googlePanel() {
+  const s = getSettings();
+  const g = getGcal();
+  const connected = isConnected();
+  const origin = globalThis.location?.origin || 'http://localhost:8000';
+  const last = g.lastSync
+    ? new Date(g.lastSync).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+    : '';
+
+  return `
+    <section class="panel wide anim" data-d="4">
+      <div class="panel-head">
+        <h3>${icon('calendar')} Google Calendar</h3>
+        <p>Sync this timetable to a “Tempo — Class Timetable” calendar. Phone alerts
+           then come from the Google Calendar app on your mobile.</p>
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label>Status</label>
+        <p style="font-size:13px;color:var(--ink-2);display:flex;align-items:center;gap:8px">
+          <i class="subj-dot" style="--dot:${connected ? 'var(--accent)' : 'var(--ink-4)'}"></i>
+          ${connected
+            ? `Connected${g.calendarName ? ` · ${esc(g.calendarName)}` : ''}${last ? ` · last synced ${esc(last)}` : ''}`
+            : g.clientId
+              ? 'Not connected — tap “Connect Google Calendar”.'
+              : 'Not set up yet — add a Client ID below (free, one time).'}
+        </p>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="gcal-client">Google OAuth Client ID</label>
+          <input class="input" id="gcal-client" type="text" spellcheck="false"
+                 placeholder="xxxx.apps.googleusercontent.com"
+                 value="${esc(g.clientId || '')}" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="gcal-end">Semester ends</label>
+          <input class="input" id="gcal-end" type="date" value="${esc(s.gcalEnd || '')}">
+        </div>
+      </div>
+
+      <div class="switch-row" style="margin:4px 0 16px">
+        <div class="txt">
+          <b>Sync changes automatically</b>
+          <span>Adding, editing or deleting a period updates Google Calendar too</span>
+        </div>
+        <button class="switch" id="gcal-auto" role="switch" type="button"
+                aria-checked="${s.gcalAuto !== false}" aria-label="Toggle automatic Google Calendar sync"></button>
+      </div>
+
+      <div class="data-actions">
+        <button class="btn btn-primary btn-sm" type="button" id="gcal-connect">
+          ${icon('calendar', { size: 14 })} ${connected ? 'Reconnect Google' : 'Connect Google Calendar'}
+        </button>
+        <button class="btn btn-ghost btn-sm" type="button" id="gcal-sync">
+          ${icon('rotate', { size: 14 })} Sync now
+        </button>
+        ${connected ? `<button class="btn btn-ghost btn-sm" type="button" id="gcal-disconnect">Disconnect</button>` : ''}
+        <button class="btn btn-ghost btn-sm" type="button" id="gcal-ics">
+          ${icon('download', { size: 14 })} Download .ics instead
+        </button>
+      </div>
+
+      <details style="margin-top:16px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600">One-time setup (about 3 minutes)</summary>
+        <ol style="font-size:12.5px;line-height:1.7;color:var(--ink-2);padding-left:18px;margin-top:10px">
+          <li>Open <b>console.cloud.google.com</b> → create a project (any name).</li>
+          <li><b>APIs &amp; Services → Library</b> → enable <b>Google Calendar API</b>.</li>
+          <li><b>OAuth consent screen</b> → External → add your Gmail as a test user.</li>
+          <li><b>Credentials → Create credentials → OAuth client ID → Web application.</b></li>
+          <li>Under <b>Authorised JavaScript origins</b> add: <code style="font-size:11.5px">${esc(origin)}</code>
+              (add <code style="font-size:11.5px">http://localhost:8000</code> too if you run it locally).</li>
+          <li>Copy the Client ID, paste it above, then tap <b>Connect Google Calendar</b> and sign in.</li>
+          <li>On your phone: install/open <b>Google Calendar</b>, sign in with the same account,
+              open the “Tempo — Class Timetable” calendar, and allow notifications —
+              you'll get an alert ${Number(s.lead) || 10} minutes before every class.</li>
+        </ol>
+        <p style="font-size:12px;color:var(--ink-3);margin-top:8px">
+          No server is involved: Tempo talks to Google directly from your browser, and only
+          ever touches the one Tempo calendar. Prefer no setup? “Download .ics instead”
+          exports the same repeating classes with alarms — import it once at
+          calendar.google.com → Settings → Import &amp; export (one-way, no auto-updates).
+        </p>
+      </details>
     </section>`;
 }
 
@@ -197,6 +288,7 @@ export function renderSettings() {
       ${profilePanel()}
       ${appearancePanel()}
       ${notificationPanel()}
+      ${googlePanel()}
       ${schedulePanel()}
       ${dataPanel()}
       ${aboutPanel()}
@@ -297,6 +389,55 @@ export function mountSettings(root) {
         onSave: (values) => addPeriod(values)
       });
     });
+  });
+
+
+  /* Google Calendar */
+  const gcalClient = root.querySelector('#gcal-client');
+  gcalClient?.addEventListener('change', () => {
+    setGcal({ clientId: gcalClient.value.trim() });
+    toast('Google Client ID saved', { ic: 'checkCircle' });
+  });
+
+  const gcalEnd = root.querySelector('#gcal-end');
+  gcalEnd?.addEventListener('change', () => setSettings({ gcalEnd: gcalEnd.value }));
+
+  root.querySelector('#gcal-auto')?.addEventListener('click', (e) => {
+    const next = !getSettings().gcalAuto;
+    setSettings({ gcalAuto: next });
+    e.currentTarget.setAttribute('aria-checked', String(next));
+  });
+
+  root.querySelector('#gcal-connect')?.addEventListener('click', async () => {
+    try {
+      const result = await connectGoogle();
+      const c = result.counts || {};
+      toast(`Google Calendar synced · ${c.created || 0} added, ${c.updated || 0} updated, ${c.deleted || 0} removed`, { ic: 'calendar' });
+    } catch (err) {
+      toast(err.message || 'Google sign-in failed', { ic: 'alert', tone: 'danger' });
+    }
+  });
+
+  root.querySelector('#gcal-sync')?.addEventListener('click', async () => {
+    try {
+      const result = await syncNow({ interactive: true });
+      if (!result.synced) throw new Error('Could not sync — try reconnecting Google.');
+      const c = result.counts || {};
+      toast(`Synced · ${c.created || 0} added, ${c.updated || 0} updated, ${c.deleted || 0} removed`, { ic: 'calendar' });
+    } catch (err) {
+      toast(err.message || 'Sync failed', { ic: 'alert', tone: 'danger' });
+    }
+  });
+
+  root.querySelector('#gcal-disconnect')?.addEventListener('click', async () => {
+    await disconnectGoogle();
+    toast('Disconnected from Google Calendar', { ic: 'bellOff' });
+    window.dispatchEvent(new CustomEvent('tempo:refresh'));
+  });
+
+  root.querySelector('#gcal-ics')?.addEventListener('click', () => {
+    downloadICS();
+    toast('Timetable .ics downloaded — import it in Google Calendar', { ic: 'download' });
   });
 
   /* data */

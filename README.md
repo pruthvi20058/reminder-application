@@ -34,6 +34,14 @@ Then open <http://localhost:8000>.
 - **Settings** — your name, light / dark / system theme, class-reminder
   notifications (lead time + test), a full timetable editor, and
   export / import / reset of your data.
+- **Google Calendar sync** — connect your Google account (Settings →
+  Google Calendar, one-time 3-minute setup with a free Google Cloud
+  OAuth Client ID) and Tempo keeps a dedicated "Tempo — Class Timetable"
+  calendar in sync: adding, editing or deleting a period in the app
+  creates, updates or deletes the matching weekly recurring event.
+  Each event has a popup reminder before it starts, so the Google
+  Calendar app notifies your phone. A no-setup `.ics` export (with
+  alarms) is also available for one-way manual import.
 - **PWA** — installable, works offline via a service worker, with proper
   icons and theme colours. The pre-loaded timetable is the 5th-semester
   schedule; edit it freely in Settings.

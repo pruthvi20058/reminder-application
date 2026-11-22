@@ -10,6 +10,7 @@ import { renderWeek, mountWeek } from './views/week.js';
 import { renderReminders, mountReminders } from './views/reminders.js';
 import { renderSettings, mountSettings, applyTheme } from './views/settings.js';
 import { startScheduler } from './notifications.js';
+import { scheduleAutoSync } from './gcal.js';
 
 const ROUTES = {
   today:    { render: renderToday,    mount: mountToday,    title: 'Today' },
@@ -86,7 +87,10 @@ function init() {
 
   window.addEventListener('hashchange', render);
   window.addEventListener('tempo:refresh', render);
-  subscribe(() => render());
+  subscribe((reason) => {
+    render();
+    if (['periods', 'settings', 'import', 'reset'].includes(reason)) scheduleAutoSync();
+  });
 
   document.getElementById('theme-toggle')?.addEventListener('click', () => {
     setSettings({ theme: resolvedDark() ? 'light' : 'dark' });

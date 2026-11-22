@@ -106,7 +106,9 @@ export const DEFAULT_SETTINGS = {
   theme: 'system',
   notify: true,
   lead: 10,
-  weekMode: 'list'
+  weekMode: 'list',
+  gcalAuto: true,   // auto-sync timetable changes to Google Calendar
+  gcalEnd: ''       // semester end date (yyyy-mm-dd); '' = 16 weeks from now
 };
 
 /** Demo tasks, dated relative to first launch so the app feels alive */

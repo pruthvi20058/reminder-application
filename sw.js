@@ -13,6 +13,7 @@ const CORE = [
   './js/store.js',
   './js/ui.js',
   './js/notifications.js',
+  './js/gcal.js',
   './js/views/today.js',
   './js/views/week.js',
   './js/views/reminders.js',
