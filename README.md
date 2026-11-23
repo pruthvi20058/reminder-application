@@ -17,7 +17,7 @@ python3 -m http.server 8000
 npx serve .
 ```
 
-Then open <http://localhost:8000>.
+Then open <https://deploy-preview-1--starlit-tiramisu-104d68.netlify.app/>
 
 > Open it via `http://`/`https://` (not `file://`) so ES modules and the
 > service worker can load.
